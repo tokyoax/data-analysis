@@ -19,11 +19,7 @@ def set_params():
     g.refresh_rate = 10
     g.stocknum = 10
     
-def set_backtest():
-    set_benchmark('000985.XSHG')
-    set_option('use_real_price', True)
-    log.set_level('order', 'error')
-    
+
 def trade(context):
     if g.days % 10 == 0:
         sample = get_index_stocks('000985.XSHG', date = None)
