@@ -19,7 +19,6 @@ def set_params():
     g.refresh_rate = 10
     g.stocknum = 10
     
-
 def trade(context):
     if g.days % 10 == 0:
         sample = get_index_stocks('000985.XSHG', date = None)
@@ -36,7 +35,6 @@ def trade(context):
         df['log_RD'] = np.log(df['log_RD'])
         df.index = df.code.values
         del df['code']
-        df = df.fillna(0)
         df[df>10000] = 10000
         df[df<-10000] = -10000
         industry_set = ['200020', '801020', '801030', '801040', '801050', '801080', '801110', '801120', '801130', 
@@ -44,7 +42,7 @@ def trade(context):
                   '801720', '801730', '801740', '801750', '801760', '801770', '801780', '801790', '801880','801890']
         
         for i in range(len(industry_set)):
-            industry = get_industry_stocks(industry_set[i], date = None)
+            industry = get_industry_stocks(industry_set[i])
             s = pd.Series([0]*len(df), index=df.index)
             s[set(industry) & set(df.index)]=1
             df[industry_set[i]] = s
