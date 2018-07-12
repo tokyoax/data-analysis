@@ -1,86 +1,205 @@
-# data-analysis
+mport talib
 import pandas as pd
-import numpy as np
-import math
-from sklearn.svm import SVR  
-from sklearn.model_selection import GridSearchCV  
-from sklearn.model_selection import learning_curve
-from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
-import jqdata
+from jqdata import *
+from sklearn import preprocessing
+from sklearn import svm
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+import datetime
+import matplotlib.pyplot as plt
 
-def initialize(context):
-    set_params()
-    set_backtest()
-    run_daily(trade, 'every_bar')
+test_stock = '399300.XSHE'
+start_date = datetime.date(2010, 1, 4)
+end_date = datetime.date(2016, 6, 3)
+test_start_date = datetime.date(2015, 2, 26)
+
+trading_days = get_all_trade_days()
+start_date_index = trading_days.index(start_date)
+end_date_index = trading_days.index(end_date)
+test_start_index = trading_days.index(test_start_date)
+result_list = []
+
+for index_end in range(test_start_index, end_date_index):
+  
+    x_all = []
+    y_all = []
+ 
+    for index in range(start_date_index, index_end):
+        
+        start_day = trading_days[index - 35]
+        end_day = trading_days[index]
+        stock_data = get_price(test_stock, start_date=start_day, end_date=end_day, \
+                               frequency='daily', fields=['close','high','low','volume'])
+        close_prices = stock_data['close'].values
+        high_prices = stock_data['high'].values
+        low_prices = stock_data['low'].values
+        volumes = stock_data['volume'].values
+        
+        sma_data = talib.SMA(close_prices)[-1]    
+        wma_data = talib.WMA(close_prices)[-1]
+        mom_data = talib.MOM(close_prices)[-1]
+        stck, stcd = talib.STOCH(high_prices, low_prices, close_prices)
+        stck_data = stck[-1]
+        stcd_data = stcd[-1]
+
+        macd, macdsignal, macdhist = talib.MACD(close_prices)
+        macd_data = macd[-1]
+        rsi_data = talib.RSI(close_prices,timeperiod=10)[-1]
+        willr_data = talib.WILLR(high_prices, low_prices, close_prices)[-1]
+        cci_data = talib.CCI(high_prices, low_prices, close_prices)[-1]
+        
+        mfi_data = talib.MFI(high_prices, low_prices, close_prices, volumes)[-1]
+        obv_data = talib.OBV(close_prices, volumes)[-1]
+        roc_data = talib.ROC(close_prices)[-1]
+        cmo_data = talib.CMO(close_prices)[-1]
+        
+      
+        features = []
+        features.append(sma_data)
+        features.append(wma_data)
+        features.append(mom_data)
+        features.append(stck_data)
+        features.append(stcd_data)
+        features.append(macd_data)
+        features.append(rsi_data)
+        features.append(willr_data)
+        features.append(cci_data)
+        features.append(mfi_data)
+        features.append(obv_data)
+        features.append(roc_data)
+        features.append(cmo_data)
+       
+        features.append(close_prices[-1])
     
-def set_params():
-    g.days = 0
-    g.refresh_rate = 10
-    g.stocknum = 10
+      
+        start_day = trading_days[index]
+        end_day = trading_days[index + 1]
+        stock_data = get_price(test_stock, start_date=start_day, end_date=end_day, \
+                               frequency='daily', fields=['close','high','low','volume'])
+        close_prices = stock_data['close'].values
+        
+        label = False
+        if close_prices[-1] > close_prices[-2]:
+            label = True
+        
+        x_all.append(features)
+        y_all.append(label)
+        
     
-def trade(context):
-    if g.days % 10 == 0:
-        sample = get_index_stocks('000985.XSHG', date = None)
-        q = query(valuation.code, valuation.market_cap, balance.total_assets - balance.total_liability,
-                  balance.total_assets / balance.total_liability, income.net_profit, income.net_profit + 1, 
-                  indicator.inc_revenue_year_on_year, balance.development_expenditure).filter(valuation.code.in_(sample))
-        df = get_fundamentals(q, date = None)
-        df.columns = ['code', 'log_mcap', 'log_NC', 'LEV', 'NI_p', 'NI_n', 'g', 'log_RD']
-        
-        df['log_mcap'] = np.log(df['log_mcap'])
-        df['log_NC'] = np.log(df['log_NC'])
-        df['NI_p'] = np.log(np.abs(df['NI_p']))
-        df['NI_n'] = np.log(np.abs(df['NI_n'][df['NI_n']<0]))
-        df['log_RD'] = np.log(df['log_RD'])
-        df.index = df.code.values
-        del df['code']
-        df[df>10000] = 10000
-        df[df<-10000] = -10000
-        industry_set = ['200020', '801020', '801030', '801040', '801050', '801080', '801110', '801120', '801130', 
-                  '801140', '801150', '801160', '801170', '801180', '801200', '801210', '801230', '801710',
-                  '801720', '801730', '801740', '801750', '801760', '801770', '801780', '801790', '801880','801890']
-        
-        for i in range(len(industry_set)):
-            industry = get_industry_stocks(industry_set[i])
-            s = pd.Series([0]*len(df), index=df.index)
-            s[set(industry) & set(df.index)]=1
-            df[industry_set[i]] = s
-            
-        X = df[['log_NC', 'LEV', 'NI_p', 'NI_n', 'g', 'log_RD','801010', '801020', '801030', '801040', '801050', 
-                '801080', '801110', '801120', '801130', '801140', '801150', '801160', '801170', '801180', '801200', 
-                '801210', '801230', '801710', '801720', '801730', '801740', '801750', '801760', '801770', '801780', 
-                '801790', '801880', '801890']]
-        Y = df[['log_mcap']]
-        X = X.fillna(0)
-        Y = Y.fillna(0)
-        
-        svr = SVR(kernel='rbf', gamma=0.1) 
-        model = svr.fit(X, Y)
-        factor = Y - pd.DataFrame(svr.predict(X), index = Y.index, columns = ['log_mcap'])
-        factor = factor.sort_index(by = 'log_mcap')
-        stockset = list(factor.index[:10])
-        sell_list = list(context.portfolio.positions.keys())
-        for stock in sell_list:
-            if stock not in stockset[:g.stocknum]:
-                stock_sell = stock
-                order_target_value(stock_sell, 0)
-            
-        if len(context.portfolio.positions) < g.stocknum:
-            num = g.stocknum - len(context.portfolio.positions)
-            cash = context.portfolio.cash/num
+    for index in range(len(x_all)-1, 0, -1):
+        # SMA
+        if x_all[index][0] < x_all[index][-1]:
+            x_all[index][0] = 1
         else:
-            cash = 0
-            num = 0
-        for stock in stockset[:g.stocknum]:
-            if stock in sell_list:
-                pass
+            x_all[index][0] = -1
+        # WMA
+        if x_all[index][1] < x_all[index][-1]:
+            x_all[index][1] = 1
+        else:
+            x_all[index][1] = -1
+        # MOM
+        if x_all[index][2] > 0:
+            x_all[index][2] = 1
+        else:
+            x_all[index][2] = -1
+        # STCK
+        if x_all[index][3] > x_all[index-1][3]:
+            x_all[index][3] = 1
+        else:
+            x_all[index][3] = -1
+        # STCD
+        if x_all[index][4] > x_all[index-1][4]:
+            x_all[index][4] = 1
+        else:
+            x_all[index][4] = -1
+        # MACD
+        if x_all[index][5] > x_all[index-1][5]:
+            x_all[index][5] = 1
+        else:
+            x_all[index][5] = -1
+
+        # RSI
+        if x_all[index][6] > 70:
+            x_all[index][6] = -1
+        elif x_all[index][6] < 30:
+            x_all[index][6] = 1
+        else:
+            if x_all[index][6] > x_all[index-1][6]:
+                x_all[index][6] = 1
             else:
-                stock_buy = stock
-                order_target_value(stock_buy, cash)
-                num = num - 1
-                if num == 0:
-                    break
-        g.days += 1
+                x_all[index][6] = -1
+        # WILLR
+        if x_all[index][7] > x_all[index-1][7]:
+            x_all[index][7] = 1
+        else:
+            x_all[index][7] = -1
+        # CCI
+        if x_all[index][8] > 200:
+            x_all[index][8] = -1
+        elif x_all[index][8] < -200:
+            x_all[index][8] = 1
+        else:
+            if x_all[index][8] > x_all[index-1][8]:
+                x_all[index][8] = 1
+            else:
+                x_all[index][8] = -1
+                
+        # MFI
+        if x_all[index][9] > 90:
+            x_all[index][9] = -1
+        elif x_all[index][9] < 10:
+            x_all[index][9] = 1
+        else:
+            if x_all[index][9] > x_all[index-1][9]:
+                x_all[index][9] = 1
+            else:
+                x_all[index][9] = -1
+        # OBV
+        if x_all[index][10] > x_all[index-1][10]:
+            x_all[index][10] = 1
+        else:
+            x_all[index][10] = -1
+        # ROC
+        if x_all[index][11] > 0:
+            x_all[index][11] = 1
+        else:
+            x_all[index][11] = -1
+        # CMO
+        if x_all[index][12] > 50:
+            x_all[index][12] = -1
+        elif x_all[index][12] < -50:
+            x_all[index][12] = 1
+        else:
+            if x_all[index][12] > x_all[index-1][12]:
+                x_all[index][12] = 1
+            else:
+                x_all[index][12] = -1        
+       
+        x_all[index].pop(-1)
+                
+    x_all = x_all[1:]
+    y_all = y_all[1:]
+   
+    x_train = x_all[:-1]
+    y_train = y_all[:-1
+    x_test = x_all[-1]
+    y_test = y_all[-1]
+    clf = svm.SVC()
+#     clf = RandomForestClassifier(n_estimators=50)
+#     clf = GaussianNB()
+    # 训练过程
+    clf.fit(x_train, y_train)
+    # 预测过程
+    prediction = clf.predict(x_test)
+    if prediction == y_test:
+        print('True')
+        result_list.append(1)
     else:
-        g.days = g.days + 1    
+        print('False')
+        result_list.append(-1)
+x = range(0, len(result_list))
+y = []
+for i in range(0, len(result_list)):
+    y.append((1 + float(sum(result_list[:i])) / (i+1)) / 2)
+line, = plt.plot(x, y)
+plt.show
