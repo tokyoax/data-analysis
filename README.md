@@ -185,11 +185,11 @@ for index_end in range(test_start_index, end_date_index):
     x_test = x_all[-1]
     y_test = y_all[-1]
     clf = svm.SVC()
-#     clf = RandomForestClassifier(n_estimators=50)
-#     clf = GaussianNB()
-    # 训练过程
+
+
+  
     clf.fit(x_train, y_train)
-    # 预测过程
+  
     prediction = clf.predict(x_test)
     if prediction == y_test:
         print('True')
